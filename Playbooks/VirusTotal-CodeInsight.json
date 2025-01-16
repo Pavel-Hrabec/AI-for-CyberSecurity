@@ -1,0 +1,359 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VirusTotal-CodeInsight",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "VirustotalConnectionName": "[concat('Virustotal-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                        "type": "ApiConnectionWebhook",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
+                                }
+                            },
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "path": "/incident-creation"
+                        }
+                    }
+                },
+                "actions": {
+                    "Entities_-_Get_FileHashes": {
+                        "runAfter": {
+                            "Entities_-_Get_IPs": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "path": "/entities/filehash"
+                        }
+                    },
+                    "Entities_-_Get_IPs": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "path": "/entities/ip"
+                    }
+                },
+                "Initialize_array_|_reported_ids": {
+                    "runAfter": {
+                        "Initialize_variable_-_CodeInsight": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "reported_ids",
+                                "type": "array"
+                            }
+                        ]
+                    }
+                },
+                "Loop_through_all_IPs": {
+                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "VirusTotal_|_IP_scan_report": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<img src=\"https://vt-gtm-wp-media.storage.googleapis.com/logo.png\" alt=\"Virustotal logo\" width=\"200\"/><h3>IP address: @{body('VirusTotal_|_IP_scan_report')?['data']?['id']}</h2><hr/><h3>Detection</h3><table><tr><th>Harmless</th><th>Malicious</th><th>Suspicious</th><th>Undetected</th></tr><tr><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['last_analysis_stats']?['harmless']}</td><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['last_analysis_stats']?['malicious']}</td><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}</td><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['last_analysis_stats']?['undetected']}</td></tr></table><ul><li>&#39;harmless&#39; : site is not malicious</li><li>&#39;undetected&#39; : scanner has no opinion about this site</li><li>&#39;suspicious&#39; : scanner thinks the site is suspicious</li><li>&#39;malicious&#39; : scanner thinks the site is malicious</li></ul><h3>Community Score</h3><table><tr><th>Malicious</th><th>Harmless</th></tr><tr><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['total_votes']?['malicious']}</td><td style='text-align: center'>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['total_votes']?['harmless']}</td></tr></table><h3>Details</h3><table><tr><th>Network</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['network']}</td></tr><tr><th>ASN Number</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['asn']}</td></tr><tr><th>ASN Label</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['as_owner']}</td></tr><tr><th>Regional Internet Registry</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['regional_internet_registry']}</td></tr><tr><th>Country</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['country']}</td></tr><tr><th>Continent</th><td>@{body('VirusTotal_|_IP_scan_report')?['data']?['attributes']?['continent']}</td></tr></table>[Full report](https://www.virustotal.com/gui/ip-address/@{body('VirusTotal_|_IP_scan_report')?['data']?['id']})"
+                                },
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "VirusTotal_|_IP_scan_report": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('Loop_through_all_IPs')?['Address'])}"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable_-_CodeInsight": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Loop_through_all_file_hashes": {
+                    "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                    "actions": {
+                        "If_not_reported_before": {
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "reported_ids",
+                                        "value": "@body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['id']"
+                                    }
+                                },
+                                "Condition": {
+                                    "actions": {
+                                        "Set_variable_-_CodeInsight": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "CodeInsight",
+                                                "value": "@body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['crowdsourced_ai_results']?[0]?['analysis']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_Results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                    "actions": {}
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "contains": [
+                                                "@variables('Results')",
+                                                "crowdsourced_ai_results"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "type": "If"
+                            },
+                            "Set_variable_-_Results": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                    "name": "Results",
+                                    "value": "@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']}"
+                                }
+                            },
+                            "Add_comment_to_incident_(V3)_2": {
+                                "runAfter": {
+                                    "Condition": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection",
+                                "inputs": {
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "body": {
+                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                        "message": "<img src=\"https://vt-gtm-wp-media.storage.googleapis.com/logo.png\" alt=\"Virustotal logo\"><h3>File: @{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['meaningful_name']} - @{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['id']}</h3><hr><h3>Detection</h3>@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'sigma_analysis_stats'),concat('<h4>Crowdsourced Sigma Rules</h4><table><tbody><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr><tr><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sigma_analysis_stats']?['critical'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sigma_analysis_stats']?['high'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sigma_analysis_stats']?['medium'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sigma_analysis_stats']?['low'],'</td></tr></tbody></table>'),null)}@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'crowdsourced_ids_stats'),concat('<h4>Crowdsourced IDS Rules</h4><table><tbody><tr><th>High</th><th>Medium</th><th>Low</th><th>Info</th></tr><tr><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['crowdsourced_ids_stats']?['high'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['crowdsourced_ids_stats']?['medium'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['crowdsourced_ids_stats']?['low'],'</td><td style=\"%22text-align:center%22\">',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['crowdsourced_ids_stats']?['info'],'</td></tr></tbody></table>'),null)}<h4>Analyses</h4><table><tbody><tr><th>Harmless</th><th>Malicious</th><th>Suspicious</th><th>Undetected</th></tr><tr><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_analysis_stats']?['harmless']}</td><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_analysis_stats']?['malicious']}</td><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}</td><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_analysis_stats']?['undetected']}</td></tr></tbody></table><h3>Community Score</h3><table><tbody><tr><th>Malicious</th><th>Harmless</th></tr><tr><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['total_votes']?['malicious']}</td><td style=\"text-align:center\">@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['total_votes']?['harmless']}</td></tr></tbody></table><h3>Details</h3><h4>Basic Properties</h4><table><tbody><tr><th>MD5</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['md5']}</td></tr><tr><th>SHA-1</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sha1']}</td></tr><tr><th>SHA-256</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['sha256']}</td></tr><tr><th>File type</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['type_description']}</td></tr><tr><th>Magic</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['magic']}</td></tr><tr><th>File size</th><td>@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['size']} bytes</td></tr></tbody></table><h4>History</h4>@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'creation_date'),concat('<tr><th>Creation Time</th><td>',addToTime('1970-01-01T00:00:00Z',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['creation_date'],'Second','u'),'</td></tr>'),null)}@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'last_modification_date'),concat('<tr><th>Latest Contents Modification</th><td>',addToTime('1970-01-01T00:00:00Z',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_modification_date'],'Second','u'),'</td></tr>'),null)}<table><tbody><tr><th>First Submission</th><td>@{addToTime('1970-01-01T00:00:00Z',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['first_submission_date'],'Second','u')}</td></tr><tr><th>Last Submission</th><td>@{addToTime('1970-01-01T00:00:00Z',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_submission_date'],'Second','u')}</td></tr><tr><th>Last Analysis</th><td>@{addToTime('1970-01-01T00:00:00Z',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['last_analysis_date'],'Second','u')}</td></tr></tbody></table>@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'trusted_verdict'),concat('<h4>Known source</h4><table><tr><th>Organization</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['trusted_verdict']?['organization'],'</td></tr><tr><th>File name</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['trusted_verdict']?['filename'],'</td></tr></table>'),null)}@{if(contains(body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes'],'signature_info'),concat('<h4>Signature Info</h4><table><tr><th>Signature verifiation</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['verified'],'</td></tr><tr><th>Copyright</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['copyright'],'</td></tr><tr><th>Product</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['product'],'</td></tr><tr><th>Description</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['description'],'</td></tr><tr><th>Original Name</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['original name'],'</td></tr><tr><th>Internal Name</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['internal name'],'</td></tr><tr><th>File Version</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['file version'],'</td></tr><tr><th>Date signed</th><td>',body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['attributes']?['signature_info']?['signing date'],'</td></tr></table>'),null)}[Full report](https://www.virustotal.com/gui/file/@{body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['id']})\n\n@{if(empty(variables('CodeInsight')), null, concat('<h4>CodeInsight</h4><p>', variables('CodeInsight'), '</p>'))}"
+                                    },
+                                    "path": "/Incidents/Comment"
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "VirusTotal_|_Retrieve_information_about_a_file": [
+                                "Succeeded"
+                            ]
+                        },
+                        "else": {
+                        "actions": {}
+                    },
+                    "expression": {
+                        "and": [
+                            {
+                                "not": {
+                                    "contains": [
+                                        "@variables('reported_ids')",
+                                        "@body('VirusTotal_|_Retrieve_information_about_a_file')?['data']?['id']"
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    "type": "If"
+                },
+                "VirusTotal_|_Retrieve_information_about_a_file": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                            }
+                        },
+                        "method": "get",
+                        "path": "/api/v3/files/@{encodeURIComponent(items('Loop_through_all_file_hashes')?['Value'])}"
+                    }
+                }
+            },
+            "runAfter": {
+                "Initialize_array_|_reported_ids": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Foreach",
+            "runtimeConfiguration": {
+                "concurrency": {
+                    "repetitions": 1
+                }
+            }
+        },
+        "Initialize_variable_-_Results": {
+            "runAfter": {
+                "Entities_-_Get_FileHashes": [
+                    "Succeeded"
+                ]
+            },
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "Results",
+                        "type": "string"
+                    }
+                ]
+            }
+        },
+        "Initialize_variable_-_CodeInsight": {
+            "runAfter": {
+                "Initialize_variable_-_Results": [
+                    "Succeeded"
+                ]
+            },
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "CodeInsight",
+                        "type": "string"
+                    }
+                ]
+            }
+        }
+    },
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+    "value": {
+        "azuresentinel_3": {
+            "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+            "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+            "connectionProperties": {
+                "authentication": {
+                    "type": "ManagedServiceIdentity"
+                }
+            }
+        },
+        "virustotal": {
+            "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirustotalConnectionName'))]",
+            "connectionName": "[variables('VirustotalConnectionName')]",
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Virustotal')]"
+        }
+    }
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('VirustotalConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('VirustotalConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('VirustotalConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Virustotal')]"
+}
+}
+}
+]
+}
