@@ -1,17 +1,17 @@
 ### ChatGPT-Playbook-v1  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v1.json?raw=true)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Playbook-v1.json)
 
 ### ChatGPT-Playbook-v2  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v2.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Playbook-v2.json)
 
 ### ChatGPT-Playbook-v3  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v3.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Playbook-v3.json)
 
 ### ChatGPT-Playbook-v4  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v4.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Playbook-v4.json)
 
 ### VirusTotal with CodeInsight  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/VirusTotal-CodeInsight.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FVirusTotal-CodeInsight.json)
 
 ### ChatGPT-Generate-Report  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Generate-Report.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Generate-Report.json)
