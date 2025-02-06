@@ -1,5 +1,5 @@
 ### ChatGPT-Playbook-v1  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v1.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v1.json?raw=true)
 
 ### ChatGPT-Playbook-v2  
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/main/Playbooks/ChatGPT-Playbook-v2.json)
