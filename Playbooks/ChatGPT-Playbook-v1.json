@@ -1,0 +1,389 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "",
+        "description": "",
+        "prerequisites": "",
+    "postDeployment": [],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "",
+"entities": [],
+"tags": [],
+"support": {
+"tier": "community",
+"armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+},
+"author": {
+"name": ""
+}
+},
+"parameters": {
+"PlaybookName": {
+"defaultValue": "ChatGPT-Playbook",
+"type": "string"
+}
+},
+"variables": {
+"MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+},
+"resources": [
+{
+"properties": {
+    "provisioningState": "Succeeded",
+    "state": "Enabled",
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+            "defaultValue": {},
+            "type": "Object"
+        }
+    },
+    "triggers": {
+        "Microsoft_Sentinel_incident": {
+            "type": "ApiConnectionWebhook",
+            "inputs": {
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                },
+                "body": {
+                    "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+            }
+        }
+    },
+    "actions": {
+        "Initialize_variable_-_OpenAI_URI": {
+        "runAfter": {},
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "OpenAI URI",
+                    "type": "string",
+                    "value": "https://api.openai.com/v1/chat/completions"
+                }
+            ]
+        }
+    },
+    "Initialize_variable_-_API_Key": {
+        "runAfter": {
+            "Initialize_variable_-_OpenAI_URI": [
+                "Succeeded"
+            ]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "API Key",
+                    "type": "string",
+                    "value": "Bearer UNIQUE TOKEN"
+                }
+            ]
+        }
+    },
+    "Initialize_variable_-_ChatGPT_Role": {
+        "runAfter": {
+            "Initialize_variable_-_API_Key": [
+                "Succeeded"
+            ]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "ChatGPT Role",
+                    "type": "string",
+                    "value": "You are cyber security analyst and I need you to evaluate current incident. You will recommend a systematic approach for the incident analyst to validate the legitimacy of the reported incident, emphasizing key indicators that may confirm or disprove its authenticity. Detailed information about the incident will be provided in the next prompt. "
+                }
+            ]
+        }
+    },
+    "Initialize_variable_-_ChatGPT_Prompt": {
+        "runAfter": {
+            "Initialize_variable_-_ChatGPT_Role": [
+                "Succeeded"
+            ]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "ChatGPT Prompt",
+                    "type": "string",
+                    "value": "Give me recommendation based on following details:\n\nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Description: @{triggerBody()?['object']?['properties']?['description']}\nEntities: @{triggerBody()?['object']?['properties']?['relatedEntities']}"
+                }
+            ]
+        }
+    },
+    "Initialize_variable_-_ChatGPT_Response": {
+        "runAfter": {
+            "Initialize_variable_-_ChatGPT_Prompt": [
+                "Succeeded"
+            ]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "ChatGPT Response",
+                    "type": "string"
+                }
+            ]
+        }
+    },
+    "HTTP_-_Call_ChatGPT": {
+        "runAfter": {
+            "Initialize_variable_-_ChatGPT_Response": [
+                "Succeeded"
+            ]
+        },
+        "type": "Http",
+        "inputs": {
+            "uri": "@variables('OpenAI URI')",
+            "method": "POST",
+            "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "@{variables('API Key')}"
+            },
+            "body": {
+                "model": "gpt-4o",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "@{variables('ChatGPT Role')}"
+                            }
+                        ]
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "@{variables('ChatGPT Prompt')}"
+                            }
+                        ]
+                    }
+                ],
+                "response_format": {
+                    "type": "text"
+                },
+                "temperature": 0.7,
+                "max_completion_tokens": 8000,
+                "top_p": 0.5,
+                "frequency_penalty": 0,
+                "presence_penalty": 0
+            }
+        },
+        "runtimeConfiguration": {
+            "contentTransfer": {
+                "transferMode": "Chunked"
+            }
+        }
+    },
+    "Parse_JSON": {
+        "runAfter": {
+            "HTTP_-_Call_ChatGPT": [
+                "Succeeded"
+            ]
+        },
+        "type": "ParseJson",
+        "inputs": {
+            "content": "@body('HTTP_-_Call_ChatGPT')",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "object": {
+                        "type": "string"
+                    },
+                    "created": {
+                        "type": "integer"
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "choices": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "index": {
+                                    "type": "integer"
+                                },
+                                "message": {
+                                    "type": "object",
+                                    "properties": {
+                                        "role": {
+                                            "type": "string"
+                                        },
+                                        "content": {
+                                            "type": "string"
+                                        },
+                                    "refusal": {}
+                                }
+                            },
+                        "logprobs": {},
+                        "finish_reason": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "message",
+                        "logprobs",
+                        "finish_reason"
+                    ]
+                }
+            },
+            "usage": {
+                "type": "object",
+                "properties": {
+                    "prompt_tokens": {
+                        "type": "integer"
+                    },
+                    "completion_tokens": {
+                        "type": "integer"
+                    },
+                    "total_tokens": {
+                        "type": "integer"
+                    },
+                    "prompt_tokens_details": {
+                        "type": "object",
+                        "properties": {
+                            "cached_tokens": {
+                                "type": "integer"
+                            },
+                            "audio_tokens": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "completion_tokens_details": {
+                        "type": "object",
+                        "properties": {
+                            "reasoning_tokens": {
+                                "type": "integer"
+                            },
+                            "audio_tokens": {
+                                "type": "integer"
+                            },
+                            "accepted_prediction_tokens": {
+                                "type": "integer"
+                            },
+                            "rejected_prediction_tokens": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                }
+            },
+            "system_fingerprint": {
+                "type": "string"
+            }
+        }
+    }
+}
+},
+"For_each": {
+"foreach": "@outputs('Parse_JSON')?['body']?['choices']",
+"actions": {
+    "Set_variable_-_ChatGPT_Response": {
+        "type": "SetVariable",
+        "inputs": {
+            "name": "ChatGPT Response",
+            "value": "@items('For_each')?['message']?['content']"
+        }
+    }
+},
+"runAfter": {
+    "Parse_JSON": [
+        "Succeeded"
+    ]
+},
+"type": "Foreach"
+},
+"Add_comment_to_incident_(V3)": {
+"runAfter": {
+    "For_each": [
+        "Succeeded"
+    ]
+},
+"type": "ApiConnection",
+"inputs": {
+    "host": {
+        "connection": {
+            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+        }
+    },
+    "method": "post",
+    "body": {
+        "incidentArmId": "@triggerBody()?['object']?['id']",
+        "message": "<p class=\"editor-paragraph\">This message was created by ChatGPT and contains recommendation for the incident:</p><br><p class=\"editor-paragraph\">@{variables('ChatGPT Response')}</p>"
+    },
+    "path": "/Incidents/Comment"
+}
+}
+},
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+"value": {
+"azuresentinel": {
+"connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+"connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+"connectionProperties": {
+    "authentication": {
+        "type": "ManagedServiceIdentity"
+    }
+}
+}
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"tags": {
+"hidden-SentinelTemplateName": "ChatGPT-Playbook",
+"hidden-SentinelTemplateVersion": "1.0"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+}
+]
+}

@@ -1,0 +1,845 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ChatGPT-Playbook-v4",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable_-_OpenAI_URI": {
+                            "runAfter": {
+                                "Append_to_string_variable_-_Query_Results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OpenAI URI",
+                                        "type": "string",
+                                        "value": "https://api.openai.com/v1/chat/completions"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_API_Key": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "API Key",
+                                        "type": "string",
+                                        "value": "@body('Get_secret')?['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_Role": {
+                            "runAfter": {
+                                "Initialize_variable_-_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT Role",
+                                        "type": "string",
+                                        "value": "You are cyber security analyst and I need you to evaluate current incident. You will recommend a systematic approach for the incident analyst to validate the legitimacy of the reported incident, emphasizing key indicators that may confirm or disprove its authenticity. Detailed information about the incident will be provided in the next prompt. "
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_Prompt": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_Role": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT Prompt",
+                                        "type": "string",
+                                        "value": "Create actionable next steps during incident reponse for the following cyber security incident:\n\nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Description: @{triggerBody()?['object']?['properties']?['description']}\nEntities: @{triggerBody()?['object']?['properties']?['relatedEntities']}\nLogs: @{variables('Alert Query Results')}\nFile information: @{variables('Comment Query Results')}\n\nAt the end create a rating from 0 - 100 how likely it's given incident a threat."
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_Response": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_Prompt": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT Response",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "HTTP_-_Call_ChatGPT": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@variables('OpenAI URI')",
+                                "method": "POST",
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "@{variables('API Key')}"
+                                },
+                                "body": {
+                                    "model": "gpt-4o",
+                                    "messages": [
+                                        {
+                                            "role": "system",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "@{variables('ChatGPT Role')}"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "role": "user",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "@{variables('ChatGPT Prompt')}"
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "response_format": {
+                                        "type": "text"
+                                    },
+                                    "temperature": 0.7,
+                                    "max_completion_tokens": 8000,
+                                    "top_p": 0.5,
+                                    "frequency_penalty": 0,
+                                    "presence_penalty": 0
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP_-_Call_ChatGPT": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Call_ChatGPT')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "object": {
+                                            "type": "string"
+                                        },
+                                        "created": {
+                                            "type": "integer"
+                                        },
+                                        "model": {
+                                            "type": "string"
+                                        },
+                                        "choices": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "index": {
+                                                        "type": "integer"
+                                                    },
+                                                    "message": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "role": {
+                                                                "type": "string"
+                                                            },
+                                                            "content": {
+                                                                "type": "string"
+                                                            },
+                                                            "refusal": {}
+                                                        }
+                                                    },
+                                                    "logprobs": {},
+                                                    "finish_reason": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "index",
+                                                    "message",
+                                                    "logprobs",
+                                                    "finish_reason"
+                                                ]
+                                            }
+                                        },
+                                        "usage": {
+                                            "type": "object",
+                                            "properties": {
+                                                "prompt_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "completion_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "total_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "prompt_tokens_details": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "cached_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "audio_tokens": {
+                                                            "type": "integer"
+                                                        }
+                                                    }
+                                                },
+                                                "completion_tokens_details": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "reasoning_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "audio_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "accepted_prediction_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "rejected_prediction_tokens": {
+                                                            "type": "integer"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "system_fingerprint": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@outputs('Parse_JSON')?['body']?['choices']",
+                            "actions": {
+                                "Set_variable_-_ChatGPT_Response": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ChatGPT Response",
+                                        "value": "@items('For_each')?['message']?['content']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Add_comment_to_incident_(V3)_1": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p class=\"editor-paragraph\">This message was created by ChatGPT and contains recommendation for the incident:</p><br><p class=\"editor-paragraph\">@{variables('ChatGPT Response')}</p><br>"
+                                },
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Initialize_variable_-_Alert_Query": {
+                            "runAfter": {
+                                "Initialize_variable_-_Comment_Query_Results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Alert Query",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Alert_Query_Results": {
+                            "runAfter": {
+                                "Initialize_variable_-_Alert_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Alert Query Results",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each_1": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Set_variable_-_Set_Alert_Query": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Alert Query",
+                                        "value": "@items('For_each_1')?['properties']?['additionalData']?['Query']"
+                                    }
+                                },
+                                "Run_query_and_list_results": {
+                                    "runAfter": {
+                                        "Set_variable_-_Set_Alert_Query": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": "@variables('Alert Query')",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "subscriptions": "1ec15845-0467-4b43-bb95-d3badc6dff62",
+                                            "resourcegroups": "RG-CyberCheck-MS",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "resourcename": "Security",
+                                            "timerange": "set in query"
+                                        }
+                                    }
+                                },
+                                "Append_to_string_variable": {
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Alert Query Results",
+                                        "value": "@body('Run_query_and_list_results')?['value']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Alert_Query_Results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_Comment_Query": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comment Query",
+                                        "type": "string",
+                                        "value": "SecurityIncident\n| where IncidentNumber == @{triggerBody()?['object']?['properties']?['incidentNumber']} and Comments != \"\"\n| where TimeGenerated  > ago(30d)\n| top 1 by TimeGenerated desc\n| mv-expand Comments\n| project Comments = Comments.message"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Comment_Query_Results": {
+                            "runAfter": {
+                                "Initialize_variable_-_Comment_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comment Query Results",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results_-_Query_Comment": {
+                            "runAfter": {
+                                "For_each_1": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@variables('Comment Query')",
+                                "path": "/queryData",
+                                "queries": {
+                                    "subscriptions": "1ec15845-0467-4b43-bb95-d3badc6dff62",
+                                    "resourcegroups": "RG-CyberCheck-MS",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "resourcename": "Security",
+                                    "timerange": "set in query"
+                                }
+                            }
+                        },
+                        "Append_to_string_variable_-_Query_Results": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Query_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "Comment Query Results",
+                                "value": "@body('Run_query_and_list_results_-_Query_Comment')?['value']"
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_KQL_Role": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT KQL Role",
+                                        "type": "string",
+                                        "value": "You are cyber security analyst with expertise in statistical modeling. Your goal is to generate KQL (Kusto Query Language) queries to analyze cybersecurity incidents effectively. The queries must be actionable and tailored to investigate specific indicators of compromise (IoCs) and follow the recommended steps for analysis.\n\nStructure:\n```\nInclude comments in the KQL queries to explain each step of the query.\nUse filters for the incident's specific IoCs (e.g., IP addresses, file hashes, or domain names).\nLeverage appropriate data sources and tables for the investigation.\nCorrelate information across tables if necessary to uncover patterns or anomalies.\n```\n\nData Sources: The queries can utilize the following tables (or their equivalents based on the data source):\n\n```\nMicrosoft Entra ID Logs: SigninLogs, AuditLogs\nAzure Cloud: Azure Activity\nMicrosoft Defender: DeviceEvents, DeviceNetworkEvents, AlertInfo, CloudAppEvents, DeviceFileEvents, DeviceImageLoadEvents, DeviceRegistryEvents, UrlClickEvents, EmailEvents\nWindows Security Logs: SecurityEvent\n```\n\nQuery Requirements:\n\n```\nFocus on identifying affected users, devices, or processes.\nSearch for specific IoCs provided in the incident details.\nProvide summaries or visualizations where applicable (e.g., using summarize or render).\n```\n\nOutput: Ensure the queries\n\n```\nAre optimized for performance.\nInclude detailed filtering and correlation logic.\nClearly indicate findings such as counts, unique entities, or unusual patterns.\nProgress from simple queries to more difficult ones\n```\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_KQL_Prompt": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_KQL_Role": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT KQL Prompt",
+                                        "type": "string",
+                                        "value": "Generate KQL Queries for following cyber security incident:\n@{variables('ChatGPT Response')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ChatGPT_KQL_Response": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_KQL_Prompt": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ChatGPT KQL Response",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "HTTP_-_Call_ChatGPT_for_KQL_Recommendation": {
+                            "runAfter": {
+                                "Initialize_variable_-_ChatGPT_KQL_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@variables('OpenAI URI')",
+                                "method": "POST",
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "@{variables('API Key')}"
+                                },
+                                "body": {
+                                    "model": "gpt-4o",
+                                    "messages": [
+                                        {
+                                            "role": "system",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "@{variables('ChatGPT KQL Role')}"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "role": "user",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": "@{variables('ChatGPT KQL Prompt')}"
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "response_format": {
+                                        "type": "text"
+                                    },
+                                    "temperature": 0.7,
+                                    "max_completion_tokens": 8000,
+                                    "top_p": 0.5,
+                                    "frequency_penalty": 0,
+                                    "presence_penalty": 0
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_JSON_-_Call_ChatGPT_for_KQL_Recommendation": {
+                            "runAfter": {
+                                "HTTP_-_Call_ChatGPT_for_KQL_Recommendation": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Call_ChatGPT_for_KQL_Recommendation')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "object": {
+                                            "type": "string"
+                                        },
+                                        "created": {
+                                            "type": "integer"
+                                        },
+                                        "model": {
+                                            "type": "string"
+                                        },
+                                        "choices": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "index": {
+                                                        "type": "integer"
+                                                    },
+                                                    "message": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "role": {
+                                                                "type": "string"
+                                                            },
+                                                            "content": {
+                                                                "type": "string"
+                                                            },
+                                                            "refusal": {}
+                                                        }
+                                                    },
+                                                    "logprobs": {},
+                                                    "finish_reason": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "index",
+                                                    "message",
+                                                    "logprobs",
+                                                    "finish_reason"
+                                                ]
+                                            }
+                                        },
+                                        "usage": {
+                                            "type": "object",
+                                            "properties": {
+                                                "prompt_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "completion_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "total_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "prompt_tokens_details": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "cached_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "audio_tokens": {
+                                                            "type": "integer"
+                                                        }
+                                                    }
+                                                },
+                                                "completion_tokens_details": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "reasoning_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "audio_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "accepted_prediction_tokens": {
+                                                            "type": "integer"
+                                                        },
+                                                        "rejected_prediction_tokens": {
+                                                            "type": "integer"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "system_fingerprint": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "For_each_2": {
+                            "foreach": "@outputs('Parse_JSON_-_Call_ChatGPT_for_KQL_Recommendation')?['body']?['choices']",
+                            "actions": {
+                                "Set_variable_-_ChatGPT_KQL_Response": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ChatGPT KQL Response",
+                                        "value": "@item()?['message']?['content']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Call_ChatGPT_for_KQL_Recommendation": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Add_comment_to_incident_(V3)_1": {
+                            "runAfter": {
+                                "For_each_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p class=\"editor-paragraph\">KQL Queries Recommendation:</p><p class=\"editor-paragraph\">@{variables('ChatGPT KQL Response')}</p>"
+                                },
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_-_OpenAI_URI": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault-1']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('ChatGPT-API-KEY')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "keyvault-1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        }
+    ]
+}

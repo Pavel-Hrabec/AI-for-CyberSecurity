@@ -1,0 +1,856 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ChatGPT-Generate-Report",
+            "type": "string"
+        },
+        "Company logo link": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Company logo link"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    },
+                    "Company logo link": {
+                        "defaultValue": "[parameters('Company logo link')]",
+                        "type": "string"
+                    }
+                },
+                "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                        "type": "ApiConnectionWebhook",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "path": "/incident-creation"
+                        }
+                    }
+                },
+                "actions": {
+                    "AI_Introduction_Message": {
+                        "runAfter": {
+                            "Alert_Details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "AI Introduction Message",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "AI_Summary_Message": {
+                        "runAfter": {
+                            "AI_Introduction_Message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "AI Summary Message",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "API-Key": {
+                        "runAfter": {
+                            "OpenAI_URI": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "API-Key",
+                                    "type": "string",
+                                    "value": "Bearer YOUR-API-KEY"
+                                }
+                            ]
+                        }
+                    },
+                    "Alert_Details": {
+                        "runAfter": {
+                            "API-Key": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Alert Details",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "Company_Logo": {
+                        "runAfter": {
+                            "AI_Summary_Message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Company Logo",
+                                    "type": "string",
+                                    "value": "data:image/jpeg;base64,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"
+                                }
+                            ]
+                        }
+                    },
+                    "Compose_Email_Message": {
+                        "runAfter": {
+                            "For_each_2": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "<!DOCTYPE html>\n<html>\n<head>\n    <title>Incident Report</title>\n</head>\n<body>\n<p>&nbsp;</p>\n<p>&nbsp;</p>\n<p>&nbsp;</p>\n<p>&nbsp;</p>\n<div>\n    <table style=\"width: 100%; border-collapse: collapse;\" border=\"1\" width=\"100%\">\n        <tbody>\n        <tr>\n            <td style=\"width: 19%;\" align=\"center\" width=\"19%\"><strong><img src=\"https://azure.microsoft.com/svghandler/azure-sentinel?width=150&amp;height=79\" alt=\"\" /></strong></td>\n            <td style=\"width: 41.1434%;\" width=\"48%\">\n                <p style=\"text-align: center;\"><strong><span style=\"font-size: 12pt;\">Security Incident <br /></span></strong></p>\n                <p style=\"text-align: center;\">&nbsp;</p>\n            </td>\n            <td style=\"width: 20%;\" width=\"20%\">\n                <p><span style=\"font-size: 12pt;\"><strong>Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}</strong></span></p>\n                <p><span style=\"font-size: 13pt;\"><strong><a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">View incident</a></strong></span></p>\n            </td>\n            <td style=\"width: 13%;\" align=\"center\" width=\"13%\"><strong><img src=\"@{variables('Company Logo')}?width=150&amp;height=79\" alt=\"\" /></strong></td>\n        </tr>\n        <tr>\n            <td colspan=\"4\" width=\"100%\">\n                <p><span style=\"font-size: 16pt;\"><strong>@{triggerBody()?['object']?['properties']?['title']}</strong></span></p>\n                <p>&nbsp;</p>\n            </td>\n        </tr>\n        <tr>\n            <td style=\"width: 93.1434%;\" colspan=\"4\">\n                <p><span style=\"font-size: 12pt;\"><strong>Overview</strong></span><br /><span style=\"font-size: 12.0pt;\">@{variables('AI Introduction Message')}</span></p>\n                <p>&nbsp;</p>\n                <p><span style=\"font-size: 12.0pt;\"><span style=\"font-size: 12pt;\"><strong>Alert Details<br /></strong>@{body('Create_HTML_table_for_Alerts')}</span></span></p>\n                <p>&nbsp;</p>\n                <p><span style=\"font-size: 12pt;\"><strong>Conclusion</strong></span><br /><span style=\"font-size: 12.0pt;\">@{variables('AI Summary Message')}</span></p>\n            </td>\n        </tr>\n        </tbody>\n    </table>\n</div>\n<div>\n    <p>&nbsp;</p>\n</div>\n</body>\n</html>\n"
+                    },
+                    "Compose_Entities": {
+                        "runAfter": {
+                            "Select_Entities": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@body('Select_Entities')"
+                    },
+                    "Create_HTML_table_for_Alerts": {
+                        "runAfter": {
+                            "Run_Query_and_Get_Alerts": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Table",
+                        "inputs": {
+                            "from": "@body('Run_Query_and_Get_Alerts')?['value']",
+                            "format": "HTML"
+                        }
+                    },
+                    "For_each": {
+                        "foreach": "@body('Parse_JSON_-_Introduction_Message')?['choices']",
+                        "actions": {
+                            "Append_to_string_variable": {
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "AI Introduction Message",
+                                    "value": "@items('For_each')?['message']?['content']"
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Introduction_Message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "For_each_2": {
+                        "foreach": "@body('Parse_JSON_-_Generated_Summary_Message')?['choices']",
+                        "actions": {
+                            "Append_to_string_variable_2": {
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "AI Summary Message",
+                                    "value": "@items('For_each_2')?['message']?['content']"
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Generated_Summary_Message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "Get_AI_Generated_Introduction_Message": {
+                        "runAfter": {
+                            "Open-AI_Prompt_Introduction": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "@variables('AzureOpenAI_URI')",
+                            "method": "POST",
+                            "headers": {
+                                "Authorization": "@{variables('API-Key')}",
+                                "Content-Type": "application/json"
+                            },
+                            "body": {
+                                "model": "gpt-4o",
+                                "messages": [
+                                    {
+                                        "role": "system",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('Open-AI Role Introduction')}"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('Open-AI-Prompt Introduction')}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "response_format": {
+                                    "type": "text"
+                                },
+                                "temperature": 0.7,
+                                "max_completion_tokens": 8000,
+                                "top_p": 0.5,
+                                "frequency_penalty": 0,
+                                "presence_penalty": 0
+                            }
+                        }
+                    },
+                    "Get_AI_Generated_Summary_Message": {
+                        "runAfter": {
+                            "Open-AI_Prompt_Summary": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "@variables('AzureOpenAI_URI')",
+                            "method": "POST",
+                            "headers": {
+                                "Authorization": "@{variables('API-Key')}",
+                                "Content-Type": "application/json"
+                            },
+                            "body": {
+                                "model": "gpt-4o",
+                                "messages": [
+                                    {
+                                        "role": "system",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('Open-AI Role Summary')}"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('Open-AI Prompt Summary')}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "response_format": {
+                                    "type": "text"
+                                },
+                                "temperature": 0.7,
+                                "max_completion_tokens": 8000,
+                                "top_p": 0.5,
+                                "frequency_penalty": 0,
+                                "presence_penalty": 0
+                            }
+                        }
+                    },
+                    "Open-AI_Prompt_Introduction": {
+                        "runAfter": {
+                            "Open-AI_Role_Introduction": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Open-AI-Prompt Introduction",
+                                    "type": "string",
+                                    "value": "Create very short cyber security incident introduction based on \n\nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Description:  @{triggerBody()?['object']?['properties']?['description']}\nIncident Entities: @{outputs('Compose_Entities')}\nIncident Created Time: @{triggerBody()?['object']?['properties']?['createdTimeUtc']}(change it to format DD MM YYYY HH:MM)\nIncidents Alerts: @{body('Create_HTML_table_for_Alerts')}"
+                                }
+                            ]
+                        }
+                    },
+                    "Open-AI_Prompt_Summary": {
+                        "runAfter": {
+                            "Open-AI_Role_Summary": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Open-AI Prompt Summary",
+                                    "type": "string",
+                                    "value": "Create comprehensive summary for cyber security incident based on following information:\n\nIncident Created Time: @{triggerBody()?['object']?['properties']?['createdTimeUtc']}(change it to format DD MM YYYY HH:MM) \nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Description:  @{triggerBody()?['object']?['properties']?['description']}\nIncidents Alerts: @{body('Create_HTML_table_for_Alerts')}\nIncidents Commnets during investigation:  @{base64ToString(body('Run_query_and_visualize_results')?['attachmentContent'])}\nIncident Classification: @{triggerBody()?['object']?['properties']?['classification']}\nIncident Classification Reason: @{triggerBody()?['object']?['properties']?['classificationReason']}\nIncident Closure Message: @{triggerBody()?['object']?['properties']?['classificationComment']}\nIncident Resolved Time: @{triggerBody()?['object']?['properties']?['lastModifiedTimeUtc']} (change it to format DD MM YYYY HH:MM) \n\nAlso format text into paragraphs and add bold text to highligh key information."
+                                }
+                            ]
+                        }
+                    },
+                    "Open-AI_Role_Introduction": {
+                        "runAfter": {
+                            "Run_query_and_visualize_results": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Open-AI Role Introduction",
+                                    "type": "string",
+                                    "value": "You need to create very short cyber security incident introduction for management. In this introduction mention start of the incident, what account or host was compromised, number of events/alerts. It needs to end with following sentence. \n\"Here's a comprehensive summary of these events:\"\n\nBelow is example of cyber security incident introduction:\nOn<date>, a series of security alerts raised significant concerns regarding suspicious activities linked to an account named <account name> This incident unfolded with several notable events, each posing a potential security threat. Here's a comprehensive summary of these events:"
+                                }
+                            ]
+                        }
+                    },
+                    "Open-AI_Role_Summary": {
+                        "runAfter": {
+                            "For_each": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "Open-AI Role Summary",
+                                    "type": "string",
+                                    "value": "You need to create comprehensive summary of cyber security incidents. It should be written in a way that management will understand what happened. Explain attackers perspective and what was attempted or accomplished during the attack if incident is clasified as true positive, otherwise explain that action wasn't malicious in nature based on Incident Closure Message and incident clasification reason. You should also explain steps that lead to resolution based on comments inside incident and closure message. "
+                                }
+                            ]
+                        }
+                    },
+                    "OpenAI_URI": {
+                    "runAfter": {},
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "AzureOpenAI_URI",
+                                "type": "string",
+                                "value": "https://api.openai.com/v1/chat/completions"
+                            }
+                        ]
+                    }
+                },
+                "Parse_JSON_-_Generated_Summary_Message": {
+                    "runAfter": {
+                        "Get_AI_Generated_Summary_Message": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                        "content": "@body('Get_AI_Generated_Summary_Message')",
+                        "schema": {
+                            "properties": {
+                                "choices": {
+                                    "items": {
+                                        "properties": {
+                                            "finish_reason": {
+                                                "type": "string"
+                                            },
+                                            "index": {
+                                                "type": "integer"
+                                            },
+                                            "message": {
+                                                "properties": {
+                                                    "content": {
+                                                        "type": "string"
+                                                    },
+                                                    "role": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "required": [
+                                            "index",
+                                            "finish_reason",
+                                            "message"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                },
+                                "created": {
+                                    "type": "integer"
+                                },
+                                "id": {
+                                    "type": "string"
+                                },
+                                "model": {
+                                    "type": "string"
+                                },
+                                "object": {
+                                    "type": "string"
+                                },
+                                "usage": {
+                                    "properties": {
+                                        "completion_tokens": {
+                                            "type": "integer"
+                                        },
+                                        "prompt_tokens": {
+                                            "type": "integer"
+                                        },
+                                        "total_tokens": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "Parse_JSON_-_Introduction_Message": {
+                    "runAfter": {
+                        "Get_AI_Generated_Introduction_Message": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                        "content": "@body('Get_AI_Generated_Introduction_Message')",
+                        "schema": {
+                            "properties": {
+                                "content": {
+                                    "properties": {
+                                        "choices": {
+                                            "items": {
+                                                "properties": {
+                                                    "finish_reason": {
+                                                        "type": "string"
+                                                    },
+                                                    "index": {
+                                                        "type": "integer"
+                                                    },
+                                                    "message": {
+                                                        "properties": {
+                                                            "content": {
+                                                                "type": "string"
+                                                            },
+                                                            "role": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "index",
+                                                    "finish_reason",
+                                                    "message"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "created": {
+                                            "type": "integer"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "model": {
+                                            "type": "string"
+                                        },
+                                        "object": {
+                                            "type": "string"
+                                        },
+                                        "usage": {
+                                            "properties": {
+                                                "completion_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "prompt_tokens": {
+                                                    "type": "integer"
+                                                },
+                                                "total_tokens": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "properties": {
+                                            "properties": {
+                                                "choices": {
+                                                    "properties": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "properties": {
+                                                                    "properties": {
+                                                                        "content_filter_result": {
+                                                                            "properties": {
+                                                                                "properties": {
+                                                                                    "properties": {
+                                                                                        "error": {
+                                                                                            "properties": {
+                                                                                                "properties": {
+                                                                                                    "properties": {
+                                                                                                        "code": {
+                                                                                                            "properties": {
+                                                                                                                "type": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "message": {
+                                                                                                            "properties": {
+                                                                                                                "type": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "finish_reason": {
+                                                                            "properties": {
+                                                                                "type": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "index": {
+                                                                            "properties": {
+                                                                                "type": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "message": {
+                                                                            "properties": {
+                                                                                "properties": {
+                                                                                    "properties": {
+                                                                                        "content": {
+                                                                                            "properties": {
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "role": {
+                                                                                            "properties": {
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "required": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "type": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "created": {
+                                                    "properties": {
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "id": {
+                                                    "properties": {
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "model": {
+                                                    "properties": {
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "object": {
+                                                    "properties": {
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "usage": {
+                                                    "properties": {
+                                                        "properties": {
+                                                            "properties": {
+                                                                "completion_tokens": {
+                                                                    "properties": {
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "prompt_tokens": {
+                                                                    "properties": {
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "total_tokens": {
+                                                                    "properties": {
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "Run_Query_and_Get_Alerts": {
+                    "runAfter": {
+                        "Compose_Entities": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "body": "SecurityIncident\n| where TimeGenerated > ago(30d)\n| where IncidentNumber == @{triggerBody()?['object']?['properties']?['incidentNumber']}\n| mv-expand AlertIds\n| extend AlertIds = tostring(AlertIds)\n| join kind=inner (\n    SecurityAlert\n    | extend SystemAlertId = tostring(SystemAlertId)\n) on $left.AlertIds == $right.SystemAlertId\n| summarize arg_max(StartTime, *) by AlertIds // Select the row with the maximum StartTime for each AlertIds\n| sort by StartTime asc\n| project StartTime = format_datetime(StartTime, \"dd-MM-yy HH:mm\"), AlertName, Description = Description1, CompromisedEntity",
+                        "path": "/queryData",
+                        "queries": {
+                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                            "resourcetype": "Log Analytics Workspace",
+                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                            "timerange": "Set in query"
+                        }
+                    }
+                },
+                "Run_query_and_visualize_results": {
+                    "runAfter": {
+                        "Create_HTML_table_for_Alerts": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "body": "SecurityIncident\n| where IncidentNumber == @{triggerBody()?['object']?['properties']?['incidentNumber']} and Comments != \"\"\n| where TimeGenerated  > ago(30d)\n| top 1 by TimeGenerated desc \n| mv-expand Comments\n| project Comments = Comments.message",
+                        "path": "/visualizeQuery",
+                        "queries": {
+                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                            "resourcetype": "Log Analytics Workspace",
+                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                            "timerange": "Set in query",
+                            "visType": "Html Table"
+                        }
+                    }
+                },
+                "Select_Entities": {
+                    "runAfter": {
+                        "Company_Logo": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Select",
+                    "inputs": {
+                        "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "select": {
+                            "Entity": "@item()?['kind']",
+                            "Entity type": "@item()?['properties']?['friendlyName']"
+                        }
+                    }
+                }
+            },
+        "outputs": {}
+    },
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azuresentinel": {
+                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                    "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                },
+                "azuremonitorlogs": {
+                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                    "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        }
+    }
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+    "type": "SystemAssigned"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+    "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+    "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+    "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('AzuremonitorlogsConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('AzuremonitorlogsConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+}
+}
+}
+]
+}
