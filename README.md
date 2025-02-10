@@ -17,4 +17,4 @@
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FChatGPT-Generate-Report.json)
 
 ### AI-Training-Data
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Pavel-Hrabec/AI-for-CyberSecurity/refs/heads/main/Playbooks/AI-Training-Data.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FPavel-Hrabec%2FAI-for-CyberSecurity%2Fmain%2FPlaybooks%2FAI-Training-Data.json) 
