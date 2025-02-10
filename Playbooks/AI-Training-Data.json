@@ -1,0 +1,230 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AI-Training-Data",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable_-_Blob_Incident_File": {
+                            "runAfter": {
+                                "Append_to_string_variable_-_Incident_Comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Blob Incident File",
+                                        "type": "string",
+                                        "value": "Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}\n\nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\n\nIncident Description: @{triggerBody()?['object']?['properties']?['description']}\n\nIncident Severity: @{triggerBody()?['object']?['properties']?['severity']}\n\nIncident Comments: @{variables('Incident Comments')}\n\nIncident Classification: @{triggerBody()?['object']?['properties']?['classification']}\n\nIncident Closure Message: @{triggerBody()?['object']?['properties']?['classificationComment']}\n\nIncident Resolved Time: @{triggerBody()?['object']?['properties']?['lastModifiedTimeUtc']}\n\nAffected Entities: @{triggerBody()?['object']?['properties']?['relatedEntities']}\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "SecurityIncident\n| where IncidentNumber == @{triggerBody()?['object']?['properties']?['incidentNumber']} and Comments != \"\"\n| where TimeGenerated  > ago(30d)\n| top 1 by TimeGenerated desc \n| mv-expand Comments\n| project Comments = Comments.message",
+                                "path": "/queryData",
+                                "queries": {
+                                    "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                    "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        },
+                        "Append_to_string_variable_-_Incident_Comments": {
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "Incident Comments",
+                                "value": "@body('Run_query_and_list_results')?['value']"
+                            }
+                        },
+                        "Initialize_variable_-_Incident_Comments": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident Comments",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_blob_(V2)": {
+                            "runAfter": {
+                                "Initialize_variable_-_Blob_Incident_File": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@variables('Blob Incident File')",
+                                "headers": {
+                                    "ReadFileMetadataFromServer": true
+                                },
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('https://seyforsentinelincidents.blob.core.windows.net/'))}/files",
+                                "queries": {
+                                    "folderPath": "/incidents",
+                                    "name": "@{triggerBody()?['object']?['properties']?['incidentNumber']}.md",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                                "connectionName": "[variables('AzureblobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureblobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureblobConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                }
+            }
+        }
+    ]
+}
