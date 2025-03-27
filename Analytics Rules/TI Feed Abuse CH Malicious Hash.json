@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/14398699-23b9-4d4d-9784-91475c412266')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/14398699-23b9-4d4d-9784-91475c412266')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "TI Feed Abuse CH Malicious Hash",
+                "description": ".",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Testing rule to generate incident with malicious SHA\r\nlet timeframe = 24h;\r\nlet abuse_feed = externaldata(input: string)\r\n    [@'https://bazaar.abuse.ch/export/csv/recent/']\r\n    with (format='txt', ignoreFirstRecord=True)\r\n    | where input !startswith '#';\r\nlet hash_regex = @'(\\b[a-fA-F0-9]{32,128}\\b)';\r\nlet filetype_hash_regex = @'\"[^n]\\w*\\/.?\"';\r\nlet datetime_regex = @'\\d{4}-\\d{2}-\\d{2}\\s.{8}';\r\nlet extracted_abuse_feed = abuse_feed\r\n    | extend hashes = extractall(hash_regex, input)\r\n    | extend\r\n        first_seen_utc = extract(datetime_regex, 0, input),\r\n        signature = trim_end(@',\\s\"n\\/a\"', extract(@'\"[^0-9]\\w\\.{0,1}\\w*\",\\s\"n\\/a\"', 0, input)),\r\n        file_type = extract(@'\"\\w{2,4}\"', 0, input),\r\n        vt_percent = extract(@'\\d{1,2}\\.\\d{1,2}', 0, input),\r\n        sha256_hash = hashes[0],\r\n        md5_hash = hashes[1],\r\n        sha1_hash = hashes[2],\r\n        imp_hash = hashes[3]\r\n    | extend imp_hash = iff(array_length(hashes) > 4, hashes[4], imp_hash);\r\nextracted_abuse_feed\r\n| extend TimeGenerated = now()\r\n// Change SHA to match specific threat\r\n| where sha256_hash == 'd31b3eb5ff440d56dec719bd4371aa28bd0d261ad4af979c519d600559e1d342'\r\n| project\r\n    TimeGenerated,\r\n    first_seen_utc,\r\n    signature,\r\n    file_type,\r\n    vt_percent,\r\n    sha256_hash,\r\n    md5_hash,\r\n    sha1_hash",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "FileHash",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Value",
+                                "columnName": "sha256_hash"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ab04658a-7d5f-44d5-a286-9f7584386c6c')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ab04658a-7d5f-44d5-a286-9f7584386c6c')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Successful Sign-Ins from Tor Network",
+                "description": "This rule detects successful sign-ins from the Tor Network, which is a popular tool used by threat actors to anonymize their activity. The rule triggers when a successful sign-in event occurs on an account that has a Tor Network IP address. This could indicate a potential security threat, as legitimate users typically do not use the Tor Network to sign in to an organization's resources.",
+                "severity": "High",
+                "enabled": true,
+                "query": "let TorNodes = externaldata(torip: string)[@'https://raw.githubusercontent.com/samikroy/the-tor-project/main/torips.txt'];\r\nSigninLogs\r\n| where IPAddress in (TorNodes)\r\n| where ResultType == 0\r\n| project\r\n    TimeGenerated,\r\n    Location,\r\n    IPAddress,\r\n    UserDisplayName,\r\n    UserPrincipalName,\r\n    UserId,\r\n    LocationDetails,\r\n    RiskState,\r\n    RiskLevelDuringSignIn,\r\n    AuthenticationRequirement,\r\n    ClientAppUsed,\r\n    ConditionalAccessPolicies",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1133"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Successful Sign-Ins from Tor Network IP {{IPAddress}}",
+                    "alertDescriptionFormat": "This rule detects successful sign-ins from the Tor Network, which is a popular tool used by threat actors to anonymize their activity. The rule triggers when a successful sign-in event occurs on an account {{UserDisplayName}} that has a Tor Network IP address. This could indicate a potential security threat, as legitimate users typically do not use the Tor Network to sign in to an organization's resources."
+                },
+                "customDetails": {
+                    "IPAddress": "IPAddress",
+                    "User": "UserDisplayName"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,1479 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ChatGPT-Remediation-Playbook",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                        "type": "ApiConnectionWebhook",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "path": "/incident-creation"
+                        }
+                    }
+                },
+                "actions": {
+                    "Initialize_variable_-_ChatGPT_Role": {
+                        "runAfter": {
+                            "For_each_1": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable",
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "ChatGPT Role",
+                                    "type": "string",
+                                    "value": "Assist a cybersecurity expert with investigations by analyzing, interpreting, and organizing data, offering structured insights, and providing actionable recommendations. Use clear reasoning, factual information, and validate findings before presenting conclusions.\n\n# Capabilities and Scope\n\nThe AI assistant should:\n\n1. **Data Analysis**: Analyze logs, threat reports, system traces, network data, and other cybersecurity artifacts.\n2. **Threat Identification**: Detect anomalies, patterns, or indicators of compromise (IoCs) like IP addresses, file hashes, domains, and processes.\n3. **Incident Response Support**: Recommend next steps in incident remediation, escalation, or containment.\n4. **Evidence Organization**: Summarize findings in a structured way suitable for reports, legal compliance, or presentation to technical/non-technical stakeholders.\n5. **Context-Aware Insights**: Tailor suggestions based on the nature of cyber incidents (e.g., malware detection, web application attack, phishing attempt, insider threat).\n6. **Follow a Reasoning-First Approach**: Analyze the provided data thoroughly, demonstrate the reasoning process, and then deliver insights or conclusions.\n\n# Instructions\n\n- **Stay Technical and Concise**: Use technical terms and framework references (e.g., MITRE ATT&CK, OWASP, NIST, etc.) when necessary, but avoid unnecessary jargon.\n- **No Assumptions**: Base findings purely on provided data; do not speculate without evidence.\n- **When Unsure**: Flag the need for further investigation or additional data.\n\n# Steps\n\n1. **Input Parsing**:\n    - Interpret the provided investigation data. This may include logs, traffic data, threat reports, emails, files, or any other relevant sources.\n2. **Initial Observation**:\n    - Look for likely IoCs, anomalies, or patterns. Highlight relationships, trends, or deviations.\n3. **Detailed Analysis**:\n    - Break down findings into categories like malware signatures, activity timelines, or network behavior.\n    - Correlate data with known attack techniques, CVEs (if available), or TTPs (Tactics, Techniques, and Procedures).\n4. **Reason Out Findings**:\n    - Explain why specific data points are suspicious or relevant, referencing specific evidence.\n5. **Conclusion and Next Steps**:\n    - Summarize the findings clearly, indicate confidence levels, and provide actionable recommendations.\n\n# Output Format\n\n- Initial Observations: A brief summary of data insights and potential threats.\n- Findings: A structured list or table of findings (with sources of evidence).\n    - Types of findings: Indicator of Compromises (IoCs), Malware types, Anomalies, Attack attribution, etc.\n- Correlation and Context: Link evidence to frameworks (e.g., MITRE ATT&CK) or historical trends/known exploits.\n- Next Steps:\n    - Containment measures (e.g., isolate machine, block IP, kill processes).\n    - Escalation thresholds (e.g., notify Incident Response team, recommend a forensic investigation).\n    - Remediation plan (e.g., software patching, improved access controls, etc.).\n\n# Examples\n\n## Example 1\n\n### **Input**:\n\nAccess logs from a web server:\n\n```\n192.168.1.10 - - [10/Oct/2023:13:55:36] \"GET /login.php?id=admin' OR 1=1 -- HTTP/1.1\" 200 -\n10.0.0.5 - - [10/Oct/2023:14:10:22] \"POST /api/login HTTP/2.0\" 403 -\n\n```\n\n### **Reasoning**:\n\n1. The GET request appears to include an SQL injection pattern (`' OR 1=1 --`), often employed to bypass authentication.\n2. A POST request following shortly after from a different IP could indicate a reconnaissance scan.\n\n### **Output**:\n\n**Observations**:\n\n1. Evidence of a potential SQL Injection from IP `192.168.1.10`.\n2. Unauthorized POST attempt from `10.0.0.5`.\n\n**Findings**:\n\n| IoC Type | Value | Evidence |\n| --- | --- | --- |\n| Malicious IP | 192.168.1.10 | SQLi payload in URL |\n| Unauthorized Access | 10.0.0.5 | Repeated POST requests with 403 response |\n\n**Next Steps**:\n\n- Block IP `192.168.1.10` at the web server's firewall.\n- Review access logs for additional patterns from the same IP.\n- Conduct further log analysis for insider threats or privilege escalation.\n\n---\n\n**NOTE**: Adjust the example output for real-world complexity. Logs might be significantly longer; placeholders like `[LONGER LOG SAMPLE X HERE]` can represent such cases.\n\n# Notes\n\n- For fraud detection: Include financial reports, geo-based anomalies, or usage analysis.\n- For file scanning: Provide hashes for analysis in VirusTotal or detection engines.\n- Special consideration for emergent threats: Prioritize details on zero-day exploits or widespread campaigns."
+                                }
+                            ]
+                        }
+                    },
+                    "HTTP_-_Call_ChatGPT": {
+                        "runAfter": {
+                            "Initialize_variable_-_ChatGPT_Role": [
+                                "Succeeded"
+                            ],
+                            "Initialize_variable_-_ChatGPT_Prompt": [
+                                "Succeeded"
+                            ],
+                            "Initialize_variable_-_ChatGPT_Response": [
+                                "Succeeded"
+                            ],
+                            "Initialize_variable_-_Remediation_Action": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "@{variables('ChatGPT URI')}",
+                            "method": "POST",
+                            "headers": {
+                                "Content-Type": "application/json",
+                                "api-key": "@{variables('API KEY')}"
+                            },
+                            "body": {
+                                "model": "gpt-4o",
+                                "messages": [
+                                    {
+                                        "role": "system",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('ChatGPT Role')}"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "@{variables('ChatGPT Prompt')}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "response_format": {
+                                    "type": "json_schema",
+                                    "json_schema": {
+                                        "name": "StructuredResponse",
+                                        "strict": true,
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "response_text": {
+                                                    "type": "string",
+                                                    "description": "The main textual response from the model."
+                                                },
+                                                "confidence_score": {
+                                                    "type": "number",
+                                                    "description": "A value between 0 and 100 indicating confidence."
+                                                },
+                                                "compromised_account_upn": {
+                                                    "type": "string",
+                                                    "description": "Targen UPN (User Principal Name) of the account, if applicable."
+                                                }
+                                            },
+                                            "required": [
+                                                "response_text",
+                                                "confidence_score",
+                                                "compromised_account_upn"
+                                            ],
+                                            "additionalProperties": false
+                                        }
+                                    }
+                                },
+                                "temperature": 0.7,
+                                "max_completion_tokens": 8000,
+                                "top_p": 0.5,
+                                "frequency_penalty": 0,
+                                "presence_penalty": 0
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "Parse_JSON": {
+                        "runAfter": {
+                            "HTTP_-_Call_ChatGPT": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('HTTP_-_Call_ChatGPT')",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "object": {
+                                        "type": "string"
+                                    },
+                                    "created": {
+                                        "type": "integer"
+                                    },
+                                    "model": {
+                                        "type": "string"
+                                    },
+                                    "choices": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "index": {
+                                                    "type": "integer"
+                                                },
+                                                "message": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "role": {
+                                                            "type": "string"
+                                                        },
+                                                        "content": {
+                                                            "type": "string"
+                                                        },
+                                                    "refusal": {}
+                                                }
+                                            },
+                                        "logprobs": {},
+                                        "finish_reason": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "index",
+                                        "message",
+                                        "logprobs",
+                                        "finish_reason"
+                                    ]
+                                }
+                            },
+                            "usage": {
+                                "type": "object",
+                                "properties": {
+                                    "prompt_tokens": {
+                                        "type": "integer"
+                                    },
+                                    "completion_tokens": {
+                                        "type": "integer"
+                                    },
+                                    "total_tokens": {
+                                        "type": "integer"
+                                    },
+                                    "prompt_tokens_details": {
+                                        "type": "object",
+                                        "properties": {
+                                            "cached_tokens": {
+                                                "type": "integer"
+                                            },
+                                            "audio_tokens": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    },
+                                    "completion_tokens_details": {
+                                        "type": "object",
+                                        "properties": {
+                                            "reasoning_tokens": {
+                                                "type": "integer"
+                                            },
+                                            "audio_tokens": {
+                                                "type": "integer"
+                                            },
+                                            "accepted_prediction_tokens": {
+                                                "type": "integer"
+                                            },
+                                            "rejected_prediction_tokens": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "service_tier": {
+                                "type": "string"
+                            },
+                            "system_fingerprint": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "Add_comment_to_incident_(V3)": {
+                "runAfter": {
+                    "Create_HTML_table_-_Sign_In_History": [
+                        "Succeeded"
+                    ],
+                    "Create_HTML_table_-_MFA_changes": [
+                        "Succeeded"
+                    ],
+                    "Create_HTML_table_-_Password_Resets": [
+                        "Succeeded"
+                    ],
+                    "Create_HTML_table_-_Device_Code_Authorization": [
+                        "Succeeded"
+                    ],
+                    "Create_HTML_table_-_Application_Consent": [
+                        "Succeeded"
+                    ],
+                    "Set_variable_-_ChatGPT_Response": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p class=\"editor-paragraph\">This message was created by ChatGPT and contains recommendation for the incident:</p><p class=\"editor-paragraph\"><br>@{variables('ChatGPT Response')}<br><br><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">User's Sign In History</strong></b></p><p class=\"editor-paragraph\">@{body('Create_HTML_table_-_Sign_In_History')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">User's MFA Changes</strong></b></p><p class=\"editor-paragraph\">@{body('Create_HTML_table_-_MFA_changes')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">User's Password Resets</strong></b></p><p class=\"editor-paragraph\">@{body('Create_HTML_table_-_Password_Resets')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">User's Device Code Authorizations</strong></b></p><p class=\"editor-paragraph\">@{body('Create_HTML_table_-_Device_Code_Authorization')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">User's Application Consents</strong></b></p><p class=\"editor-paragraph\">@{body('Create_HTML_table_-_Application_Consent')}<br><br><b><strong class=\"editor-text-bold\" style=\"font-size: 20px;\">Performed Remediation Actions</strong></b></p><p class=\"editor-paragraph\">@{variables('Remediation Action')}</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                }
+            },
+            "Entities_-_Get_Accounts": {
+                "runAfter": {
+                    "Get_secret": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                    "path": "/entities/account"
+                }
+            },
+            "For_each_1": {
+                "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                "actions": {
+                    "Run_query_and_list_results_-_Sign_In_History": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "// ========== Parameters ==========\n// Unique user identifier for the incident (set the UPN of the user you're investigating)\nlet IncidentUserPrincipalName =  '@{concat(item()?['Name'],'@',item()?['UPNSuffix'])}';\n// Optional: Object ID of the user (can be used for joins or additional filtering if needed)\nlet IncidentUserID = '@{item()?['AadUserId']}';\n// How far back to look for *recent* successful sign-ins (e.g. last 7 days)\nlet RecentLoginsTimeWindow = 60d;\n// How far back to look for *past* successful sign-ins and compare them to *recent* activity (e.g. last 90 days, excluding recent period)\nlet PastLoginsTimeWindow = 90d;\nlet RecentLoginsRaw = \n    SigninLogs\n    | where TimeGenerated >= ago(RecentLoginsTimeWindow)\n    | where ResultType == 0\n    | where UserPrincipalName =~ IncidentUserPrincipalName or UserId == IncidentUserID\n    | extend DeviceTrustType = tostring(DeviceDetail.trustType)\n    | extend DeviceRegistered = iff(isnotempty(DeviceTrustType) and DeviceTrustType != \"Unregistered\", 1, 0)\n    | extend geoInfo = geo_info_from_ip_address(IPAddress)\n    | extend Country = tostring(geoInfo.country)\n    | extend City = tostring(geoInfo.city)\n    | project IPAddress, UserPrincipalName, DeviceRegistered, Country, City;\nlet PastLoginsRaw = \n    union isfuzzy=true \n        (\n            SigninLogs\n            | extend ErrorCode = tostring(ResultType)\n            | project IPAddress, UserPrincipalName, UserId, TimeGenerated, ErrorCode\n        ),\n        (\n            AADNonInteractiveUserSignInLogs\n            | extend ErrorCode = tostring(ResultType)\n            | project IPAddress, UserPrincipalName, UserId, TimeGenerated, ErrorCode\n        )\n    | where TimeGenerated between (ago(PastLoginsTimeWindow) .. ago(RecentLoginsTimeWindow))\n    | where UserPrincipalName =~ IncidentUserPrincipalName or UserId == IncidentUserID\n    | where ErrorCode == '0';\nlet PastIPs = \n    PastLoginsRaw\n    | distinct IPAddress;\nlet PastGeoInfo = \n    PastLoginsRaw\n    | extend geoInfo = geo_info_from_ip_address(IPAddress)\n    | extend PastCountry = tostring(geoInfo.country), PastCity = tostring(geoInfo.city)\n    | summarize PastCountries = make_set(PastCountry), PastCities = make_set(PastCity) by UserPrincipalName;\nRecentLoginsRaw\n| summarize arg_max(DeviceRegistered, Country, City) by IPAddress, UserPrincipalName\n| extend DeviceRegistered = iff(DeviceRegistered == 1, 'Yes', 'No')\n| extend PreviouslyUsedIP = iff(IPAddress in (PastIPs), 'Yes', 'No')\n| join kind=leftouter (PastGeoInfo) on UserPrincipalName\n| extend \n    Country = coalesce(Country, \"-\"),\n    City = coalesce(City, \"-\"),\n    PastCountries = iif(isnull(PastCountries), dynamic([]), PastCountries),\n    PastCities = iif(isnull(PastCities), dynamic([]), PastCities)\n| extend \n    PreviouslyUsedCountry = iff(array_index_of(PastCountries, Country) != -1, 'Yes', 'No'),\n    PreviouslyUsedCity = iff(array_index_of(PastCities, City) != -1, 'Yes', 'No')\n| project IPAddress, UserPrincipalName, DeviceRegistered, Country, City, PreviouslyUsedIP, PreviouslyUsedCountry, PreviouslyUsedCity",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                "resourcegroups": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                "timerange": "Set in query"
+                            }
+                        }
+                    },
+                    "Run_query_and_list_results_-_MFA_Changes": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "// ========== Parameters ==========\n// Unique user identifier for the incident (set the UPN of the user you're investigating)\nlet IncidentUserPrincipalName =  '@{concat(item()?['Name'],'@',item()?['UPNSuffix'])}';\n// Optional: Object ID of the user (can be used for joins or additional filtering if needed)\nlet IncidentUserID = '@{item()?['AadUserId']}';\nAuditLogs\n| where TimeGenerated >= ago(1d)\n| where OperationName has 'User registered security info'\n| where Result == 'success'\n| extend TargetUser = tostring(parse_json(TargetResources)[0].userPrincipalName)\n| where TargetUser =~ IncidentUserPrincipalName \n| extend AuthRegIPAddress = parse_json(tostring(InitiatedBy.user)).ipAddress\n| project\n    AuthRegTime = TimeGenerated,\n    UserId = tolower(TargetUser),\n    OperationName,\n    AuthRegResult = Result,\n    AuthRegIPAddress;",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                "resourcegroups": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                "timerange": "Set in query"
+                            }
+                        }
+                    },
+                    "Run_query_and_list_results_-_Password_Resets": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "// ========== Parameters ==========\n// Unique user identifier for the incident (set the UPN of the user you're investigating)\nlet IncidentUserPrincipalName =  '@{concat(item()?['Name'],'@',item()?['UPNSuffix'])}';\n// Optional: Object ID of the user (can be used for joins or additional filtering if needed)\nlet IncidentUserID = '@{item()?['AadUserId']}';\nAuditLogs\n  | where TimeGenerated >= ago(1d)\n  | where  tostring(bag_keys(InitiatedBy)[0]) == \"user\"\n  | where OperationName in~ ('Change user password', 'Reset user password',  'Reset password (by admin)', 'Change password (self-service)', 'Reset password (self-service)')\n  | where IncidentUserPrincipalName =~ tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName) or IncidentUserID =~ tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend InitiatedByAccount = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | parse InitiatedByAccount with userName:string '@' userUpnSuffix:string\n  | extend InitiatedByAADUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend TargetAccount = tostring(TargetResources[0].userPrincipalName)\n  | parse TargetAccount with TargetAccountName:string '@' TargetAccountUPNSuffix:string\n  | extend TargetAADUserId = tostring(TargetResources[0].id)\n  | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))\n  | extend ModifiedProperty = tostring(parse_json(Action).displayName), ModifiedValue = tostring(parse_json(Action).newValue)\n  | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')\n  | project TimeGenerated, OperationName, ActivityDisplayName, InitiatedByAccount, TargetAccount, ResultDescription, Result, ResultReason",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                "resourcegroups": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                "timerange": "Set in query"
+                            }
+                        }
+                    },
+                    "Run_query_and_list_results_-_Device_Code_Authorization": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "// ========== Parameters ==========\n// Unique user identifier for the incident (set the UPN of the user you're investigating)\nlet IncidentUserPrincipalName =  '@{concat(item()?['Name'],'@',item()?['UPNSuffix'])}';\n// Optional: Object ID of the user (can be used for joins or additional filtering if needed)\nlet IncidentUserID = '@{item()?['AadUserId']}';\nSigninLogs\n| where TimeGenerated >= ago(1d)\n| where AuthenticationProtocol == \"deviceCode\" \n| where UserPrincipalName =~ IncidentUserPrincipalName or UserId == IncidentUserID\n| project \n    TimeGenerated, \n    UserPrincipalName, \n    AppDisplayName, \n    Location, \n    DeviceDetail, \n    IPAddress, \n    ConditionalAccessStatus, \n    AuthenticationProtocol",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                "resourcegroups": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                "timerange": "Set in query"
+                            }
+                        }
+                    },
+                    "Run_query_and_list_results_-_Application_Consent": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "// ========== Parameters ==========\n// Unique user identifier for the incident (set the UPN of the user you're investigating)\nlet IncidentUserPrincipalName =  '@{concat(item()?['Name'],'@',item()?['UPNSuffix'])}';\n// Optional: Object ID of the user (can be used for joins or additional filtering if needed)\nlet IncidentUserID = '@{item()?['AadUserId']}';\nAuditLogs\n| where TimeGenerated >= ago(1d)\n| where OperationName == 'Consent to application'\n| extend InitiatedByUserPrincipalName = tostring(todynamic(InitiatedBy) ['user']['userPrincipalName']), UserID = tostring(todynamic(InitiatedBy) ['user']['id'])\n| where (IncidentUserPrincipalName != '' and IncidentUserPrincipalName =~ InitiatedByUserPrincipalName) or (IncidentUserID != \"\" and IncidentUserID =~ UserID)\n| extend Target_CloudApplication_Name = tostring(todynamic(TargetResources)[0]['displayName']), Target_CloudApplication_AppId = tostring(todynamic(TargetResources)[0]['id'])\n| project TimeGenerated, Result, OperationName, InitiatedByUserPrincipalName, Target_CloudApplication_Name, Target_CloudApplication_AppId",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                "resourcegroups": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                "timerange": "Set in query"
+                            }
+                        }
+                    },
+                    "Parse_JSON_-_Sign_In_History": {
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Sign_In_History": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Run_query_and_list_results_-_Sign_In_History')?['value']",
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "UserPrincipalName": {
+                                            "type": "string"
+                                        },
+                                        "IPAddress": {
+                                            "type": "string"
+                                        },
+                                        "Country": {
+                                            "type": "string"
+                                        },
+                                        "City": {
+                                            "type": "string"
+                                        },
+                                        "DeviceRegistered": {
+                                            "type": "string"
+                                        },
+                                        "PreviouslyUsedIP": {
+                                            "type": "string"
+                                        },
+                                        "PreviouslyUsedCountry": {
+                                            "type": "string"
+                                        },
+                                        "PreviouslyUsedCity": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "UserPrincipalName",
+                                        "IPAddress",
+                                        "Country",
+                                        "City",
+                                        "DeviceRegistered",
+                                        "PreviouslyUsedIP",
+                                        "PreviouslyUsedCountry",
+                                        "PreviouslyUsedCity"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "For_each_-_Sign_In_History_Value": {
+                        "foreach": "@body('Parse_JSON_-_Sign_In_History')",
+                        "actions": {
+                            "Append_to_array_variable_-_Sign_In_History": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "Sign In History Table",
+                                    "value": {
+                                        "UserPrincipalName": "@{item()['UserPrincipalName']}",
+                                        "IPAddress": "@{item()['IPAddress']}",
+                                        "Country": "@{item()['Country']}",
+                                        "City": "@{item()['City']}",
+                                        "DeviceRegistered": "@{item()['DeviceRegistered']}",
+                                        "PreviouslyUsedIP": "@{item()['PreviouslyUsedIP']}",
+                                        "PreviouslySeenCountry": "@{item()['PreviouslyUsedCountry']}",
+                                        "PreviouslySeenCity": "@{item()['PreviouslyUsedCity']}"
+                                    }
+                                }
+                            },
+                            "Append_to_string_variable_-_Sign_In_History": {
+                                "runAfter": {
+                                    "Append_to_array_variable_-_Sign_In_History": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "Sign In History",
+                                    "value": {
+                                        "UserPrincipalName": "@{item()['UserPrincipalName']}",
+                                        "IPAddress": "@{item()['IPAddress']}",
+                                        "Country": "@{item()['Country']}",
+                                        "City": "@{item()['City']}",
+                                        "DeviceRegistered": "@{item()['DeviceRegistered']}",
+                                        "PreviouslyUsedIP": "@{item()['PreviouslyUsedIP']}",
+                                        "PreviouslySeenCountry": "@{item()['PreviouslyUsedCountry']}",
+                                        "PreviouslySeenCity": "@{item()['PreviouslyUsedCity']}"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Sign_In_History": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "Parse_JSON_-_MFA_Changes": {
+                        "runAfter": {
+                            "Run_query_and_list_results_-_MFA_Changes": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Run_query_and_list_results_-_MFA_Changes')?['value']",
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "AuthRegTime": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "UserId": {
+                                            "type": "string"
+                                        },
+                                        "OperationName": {
+                                            "type": "string"
+                                        },
+                                        "AuthRegResult": {
+                                            "type": "string"
+                                        },
+                                        "AuthRegIPAddress": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "AuthRegTime",
+                                        "UserId",
+                                        "OperationName",
+                                        "AuthRegResult",
+                                        "AuthRegIPAddress"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "Parse_JSON_-_Password_Resets": {
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Password_Resets": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Run_query_and_list_results_-_Password_Resets')?['value']",
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "TimeGenerated": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "OperationName": {
+                                            "type": "string"
+                                        },
+                                        "ActivityDisplayName": {
+                                            "type": "string"
+                                        },
+                                        "InitiatedByAccount": {
+                                            "type": "string"
+                                        },
+                                        "TargetAccount": {
+                                            "type": "string"
+                                        },
+                                        "ResultDescription": {
+                                            "type": "string"
+                                        },
+                                        "Result": {
+                                            "type": "string"
+                                        },
+                                        "ResultReason": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "TimeGenerated",
+                                        "OperationName",
+                                        "ActivityDisplayName",
+                                        "InitiatedByAccount",
+                                        "TargetAccount",
+                                        "ResultDescription",
+                                        "Result",
+                                        "ResultReason"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "Parse_JSON_-_Device_Code_Authorization": {
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Device_Code_Authorization": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Run_query_and_list_results_-_Device_Code_Authorization')?['value']",
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "TimeGenerated": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "UserPrincipalName": {
+                                            "type": "string"
+                                        },
+                                        "AppDisplayName": {
+                                            "type": "string"
+                                        },
+                                        "Location": {
+                                            "type": "string"
+                                        },
+                                        "DeviceDetail": {
+                                            "type": "string"
+                                        },
+                                        "IPAddress": {
+                                            "type": "string"
+                                        },
+                                        "ConditionalAccessStatus": {
+                                            "type": "string"
+                                        },
+                                        "AuthenticationProtocol": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "TimeGenerated",
+                                        "UserPrincipalName",
+                                        "AppDisplayName",
+                                        "Location",
+                                        "DeviceDetail",
+                                        "IPAddress",
+                                        "ConditionalAccessStatus",
+                                        "AuthenticationProtocol"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "Parse_JSON_-_Application_Consent": {
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Application_Consent": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Run_query_and_list_results_-_Application_Consent')?['value']",
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "TimeGenerated": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "Result": {
+                                            "type": "string"
+                                        },
+                                        "OperationName": {
+                                            "type": "string"
+                                        },
+                                        "InitiatedByUserPrincipalName": {
+                                            "type": "string"
+                                        },
+                                        "Target_CloudApplication_Name": {
+                                            "type": "string"
+                                        },
+                                        "Target_CloudApplication_AppId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "TimeGenerated",
+                                        "Result",
+                                        "OperationName",
+                                        "InitiatedByUserPrincipalName",
+                                        "Target_CloudApplication_Name",
+                                        "Target_CloudApplication_AppId"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "For_each_-_MFA_Changes": {
+                        "foreach": "@body('Parse_JSON_-_MFA_Changes')",
+                        "actions": {
+                            "Append_to_array_variable_-_MFA_Changes": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "MFA changes Table",
+                                    "value": {
+                                        "AuthRegTime": "@{item()['AuthRegTime']}",
+                                        "UserId": "@{item()['UserId']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "AuthRegResult": "@{item()['AuthRegResult']}",
+                                        "AuthRegIPAddress": "@{item()['AuthRegIPAddress']}"
+                                    }
+                                }
+                            },
+                            "Append_to_string_variable_-_MFA_Changes": {
+                                "runAfter": {
+                                    "Append_to_array_variable_-_MFA_Changes": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "MFA Changes",
+                                    "value": {
+                                        "AuthRegTime": "@{item()['AuthRegTime']}",
+                                        "UserId": "@{item()['UserId']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "AuthRegResult": "@{item()['AuthRegResult']}",
+                                        "AuthRegIPAddress": "@{item()['AuthRegIPAddress']}"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_MFA_Changes": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "For_each_-_Password_Resets": {
+                        "foreach": "@body('Parse_JSON_-_Password_Resets')",
+                        "actions": {
+                            "Append_to_array_variable_-_Password_Resets": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "Password Resets Table",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "ActivityDisplayName": "@{item()['ActivityDisplayName']}",
+                                        "InitiatedByAccount": "@{item()['InitiatedByAccount']}",
+                                        "TargetAccount": "@{item()['TargetAccount']}",
+                                        "ResultDescription": "@{item()['ResultDescription']}",
+                                        "Result": "@{item()['Result']}",
+                                        "ResultReason": "@{item()['ResultReason']}"
+                                    }
+                                }
+                            },
+                            "Append_to_string_variable_-_Password_Resets": {
+                                "runAfter": {
+                                    "Append_to_array_variable_-_Password_Resets": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "Password Resets",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "ActivityDisplayName": "@{item()['ActivityDisplayName']}",
+                                        "InitiatedByAccount": "@{item()['InitiatedByAccount']}",
+                                        "TargetAccount": "@{item()['TargetAccount']}",
+                                        "ResultDescription": "@{item()['ResultDescription']}",
+                                        "Result": "@{item()['Result']}",
+                                        "ResultReason": "@{item()['ResultReason']}"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Password_Resets": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "For_each_-_Device_Code_Authorization": {
+                        "foreach": "@body('Parse_JSON_-_Device_Code_Authorization')",
+                        "actions": {
+                            "Append_to_array_variable_-_Device_Code_Authorization": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "Device Code Authorization Table",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "UserPrincipalName": "@{item()['UserPrincipalName']}",
+                                        "AppDisplayName": "@{item()['AppDisplayName']}",
+                                        "Location": "@{item()['Location']}",
+                                        "DeviceDetail": "@{item()['DeviceDetail']}",
+                                        "IPAddress": "@{item()['IPAddress']}",
+                                        "ConditionalAccessStatus": "@{item()['ConditionalAccessStatus']}",
+                                        "AuthenticationProtocol": "@{item()['AuthenticationProtocol']}"
+                                    }
+                                }
+                            },
+                            "Append_to_string_variable_-_Device_Code_Authorization": {
+                                "runAfter": {
+                                    "Append_to_array_variable_-_Device_Code_Authorization": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "Device Code Authorization",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "UserPrincipalName": "@{item()['UserPrincipalName']}",
+                                        "AppDisplayName": "@{item()['AppDisplayName']}",
+                                        "Location": "@{item()['Location']}",
+                                        "DeviceDetail": "@{item()['DeviceDetail']}",
+                                        "IPAddress": "@{item()['IPAddress']}",
+                                        "ConditionalAccessStatus": "@{item()['ConditionalAccessStatus']}",
+                                        "AuthenticationProtocol": "@{item()['AuthenticationProtocol']}"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Device_Code_Authorization": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "For_each_-_Application_Consent": {
+                        "foreach": "@body('Parse_JSON_-_Application_Consent')",
+                        "actions": {
+                            "Append_to_array_variable_-_Application_Consent": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "Application Consent Table",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "Result": "@{item()['Result']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "InitiatedByUserPrincipalName": "@{item()['InitiatedByUserPrincipalName']}",
+                                        "Target_CloudApplication_Name": "@{item()['Target_CloudApplication_Name']}",
+                                        "Target_CloudApplication_AppId": "@{item()['Target_CloudApplication_AppId']}"
+                                    }
+                                }
+                            },
+                            "Append_to_string_variable_-_Application_Consent": {
+                                "runAfter": {
+                                    "Append_to_array_variable_-_Application_Consent": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "Application Consent",
+                                    "value": {
+                                        "TimeGenerated": "@{item()['TimeGenerated']}",
+                                        "Result": "@{item()['Result']}",
+                                        "OperationName": "@{item()['OperationName']}",
+                                        "InitiatedByUserPrincipalName": "@{item()['InitiatedByUserPrincipalName']}",
+                                        "Target_CloudApplication_Name": "@{item()['Target_CloudApplication_Name']}",
+                                        "Target_CloudApplication_AppId": "@{item()['Target_CloudApplication_AppId']}"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_-_Application_Consent": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    }
+                },
+                "runAfter": {
+                    "Initialize_variable_-_MFA_changes_Table": [
+                        "Succeeded"
+                    ],
+                    "Initialize_variable_-_Password_Resets_Table": [
+                        "Succeeded"
+                    ],
+                    "Initialize_variable_-_Device_Code_Authorization_Table": [
+                        "Succeeded"
+                    ],
+                    "Initialize_variable__API_KEY": [
+                        "Succeeded"
+                    ],
+                    "Initialize_variable_-_Sign_In_History_Table": [
+                        "Succeeded"
+                    ],
+                    "Initialize_variable_-_Application_Consent_Table": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Initialize_variable_-_ChatGPT_URI": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ChatGPT URI",
+                            "type": "string",
+                            "value": "YOUR-UNIQUE-CHATGPT-ENDPOINT"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Sign_In_History": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Sign In History",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_MFA_Changes": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "MFA Changes",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Password_Resets": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Password Resets",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Device_Code_Authorization": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Device Code Authorization",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Application_Consent": {
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Application Consent",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_ChatGPT_Response": {
+                "runAfter": {
+                    "For_each_1": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ChatGPT Response",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_ChatGPT_Prompt": {
+                "runAfter": {
+                    "For_each_1": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ChatGPT Prompt",
+                            "type": "string",
+                            "value": "Analyze the following cybersecurity incident and determine how likely it is to be a benign positive or an active threat. You will be provided with incident details and historical data related to the user, including sign-in history, changes to authentication methods, and other related activities.\n\nYour evaluation must follow these principles:\n- **Sign-in History**:\n    - Compare sign-in activity from the past 7 days to the user’s historical pattern over the past 7–90 days.\n    - **Indicators of benign activity**:\n        - Use of familiar IP addresses (seen before in historical logs).\n        - Sign-ins from usual cities or countries.\n        - Use of known, managed devices from known IPs (especially from corporate networks).\n    - **Indicators of potential threat**:\n        - New IP address or geographic location (new country or city).\n        - Use of unmanaged or unknown devices (could be, but not always)\n        - Significant deviation from historical sign-in patterns.\n- **Authentication Changes**:\n    - **Password Resets and MFA Changes**:\n        - Identify if such changes occurred.\n        - Correlate their source IP, location, and device with previous behavior.\n        - **Indicators of potential compromise**: Authentication changes from new IPs or locations, especially in conjunction with suspicious sign-ins.\n        - If no such changes are logged, that reduces suspicion.\n- **Administrative Activity**:\n    - **Device Code Authorization & Application Consent**:\n        - These actions should generally only be seen from administrative accounts.\n        - If they occur under regular user accounts or coincide with unusual sign-ins or authentication changes, **consider this highly suspicious** and potentially indicative of account compromise.\n- **Scoring and Outcome**:\n    - Assign a **risk score from 0 to 100**:\n        - **0 = Clearly benign**\n        - **100 = Almost certainly a threat**\n        - Higher score = more likely it’s an active threat requiring immediate action.\n    - Provide a **detailed written analysis** explaining your conclusion.\n    - Suggest **actionable next steps** if any risk is identified.\n------------------\nIncident Details:\n------------------\nIncident Title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Description: @{triggerBody()?['object']?['properties']?['description']}\nEntities associated with current incident: @{triggerBody()?['object']?['properties']?['relatedEntities']}\n\n-----------------------\nAssociated Activities\n-----------------------\nSign in history for the user : @{variables('Sign In History')}\nMFA Changes: @{variables('MFA Changes')}\nPassword Resets: @{variables('Password Resets')}\nDevice Code Authorization: @{variables('Device Code Authorization')}\nApplication Consent: @{variables('Application Consent')}"
+                        }
+                    ]
+                }
+            },
+            "Create_HTML_table_-_Sign_In_History": {
+                "runAfter": {
+                    "Condition": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Table",
+                "inputs": {
+                    "from": "@variables('Sign In History Table')",
+                    "format": "HTML"
+                }
+            },
+            "Initialize_variable_-_Sign_In_History_Table": {
+                "runAfter": {
+                    "Initialize_variable_-_Sign_In_History": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Sign In History Table",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Parse_JSON_-_AI_Response": {
+                "runAfter": {
+                    "Parse_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('Parse_JSON')?['choices']?[0]?['message']?['content']",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "response_text": {
+                                "type": "string"
+                            },
+                            "confidence_score": {
+                                "type": "integer"
+                            },
+                            "compromised_account_upn": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "response_text",
+                            "confidence_score"
+                        ]
+                    }
+                }
+            },
+            "Initialize_variable_-_MFA_changes_Table": {
+                "runAfter": {
+                    "Initialize_variable_-_MFA_Changes": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "MFA changes Table",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Password_Resets_Table": {
+                "runAfter": {
+                    "Initialize_variable_-_Password_Resets": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Password Resets Table",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Device_Code_Authorization_Table": {
+                "runAfter": {
+                    "Initialize_variable_-_Device_Code_Authorization": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Device Code Authorization Table",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable_-_Application_Consent_Table": {
+                "runAfter": {
+                    "Initialize_variable_-_Application_Consent": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Application Consent Table",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Initialize_variable__API_KEY": {
+                "runAfter": {
+                    "Initialize_variable_-_ChatGPT_URI": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "API KEY",
+                            "type": "string",
+                            "value": "@body('Get_secret')?['value']"
+                        }
+                    ]
+                }
+            },
+            "Condition": {
+                "actions": {
+                    "Update_incident": {
+                        "runAfter": {
+                            "Update_user": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "method": "put",
+                            "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "tagsToAdd": {
+                                    "TagsToAdd": [
+                                        {
+                                            "Tag": "AI Score @{body('Parse_JSON_-_AI_Response')['confidence_score']}"
+                                        },
+                                        {
+                                            "Tag": "Account Blocked"
+                                        }
+                                    ]
+                                },
+                                "severity": "High"
+                            },
+                            "path": "/Incidents"
+                        }
+                    },
+                    "Set_variable_-_Remediation_Action": {
+                        "runAfter": {
+                            "Update_incident": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                            "name": "Remediation Action",
+                            "value": "User was proactively blocked by automation due to high confidence score. "
+                        }
+                    },
+                    "Update_user": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuread']['connectionId']"
+                                }
+                            },
+                            "method": "patch",
+                            "body": {
+                                "accountEnabled": false
+                            },
+                            "path": "/v1.0/users/@{encodeURIComponent(body('Parse_JSON_-_AI_Response')?['compromised_account_upn'])}"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Parse_JSON_-_AI_Response": [
+                        "Succeeded"
+                    ]
+                },
+                "else": {
+                "actions": {}
+            },
+            "expression": {
+                "and": [
+                    {
+                        "greaterOrEquals": [
+                            "@body('Parse_JSON_-_AI_Response')['confidence_score']",
+                            200
+                        ]
+                    }
+                ]
+            },
+            "type": "If"
+        },
+        "Initialize_variable_-_Remediation_Action": {
+            "runAfter": {
+                "For_each_1": [
+                    "Succeeded"
+                ]
+            },
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "Remediation Action",
+                        "type": "string"
+                    }
+                ]
+            }
+        },
+        "Create_HTML_table_-_MFA_changes": {
+            "runAfter": {
+                "Condition": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Table",
+            "inputs": {
+                "from": "@variables('MFA changes Table')",
+                "format": "HTML"
+            }
+        },
+        "Create_HTML_table_-_Password_Resets": {
+            "runAfter": {
+                "Condition": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Table",
+            "inputs": {
+                "from": "@variables('Password Resets Table')",
+                "format": "HTML"
+            }
+        },
+        "Create_HTML_table_-_Device_Code_Authorization": {
+            "runAfter": {
+                "Condition": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Table",
+            "inputs": {
+                "from": "@variables('Device Code Authorization Table')",
+                "format": "HTML"
+            }
+        },
+        "Create_HTML_table_-_Application_Consent": {
+            "runAfter": {
+                "Condition": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Table",
+            "inputs": {
+                "from": "@variables('Application Consent Table')",
+                "format": "HTML"
+            }
+        },
+        "Get_secret": {
+        "runAfter": {},
+        "type": "ApiConnection",
+        "inputs": {
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                }
+            },
+            "method": "get",
+            "path": "/secrets/@{encodeURIComponent('Azure-ChatGPT-Key')}/value"
+        },
+        "runtimeConfiguration": {
+            "secureData": {
+                "properties": [
+                    "inputs",
+                    "outputs"
+                ]
+            }
+        }
+    },
+    "Set_variable_-_ChatGPT_Response": {
+        "runAfter": {
+            "Condition": [
+                "Succeeded"
+            ]
+        },
+        "type": "SetVariable",
+        "inputs": {
+            "name": "ChatGPT Response",
+            "value": "@body('Parse_JSON_-_AI_Response')['response_text']"
+        }
+    }
+},
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+"value": {
+    "azuresentinel": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+        "connectionProperties": {
+            "authentication": {
+                "type": "ManagedServiceIdentity"
+            }
+        }
+    },
+    "azuremonitorlogs": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+        "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+    },
+    "azuread": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+        "connectionName": "[variables('AzureadConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+    },
+    "keyvault": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+        "connectionName": "[variables('KeyvaultConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+        "connectionProperties": {
+            "authentication": {
+                "type": "ManagedServiceIdentity"
+            }
+        }
+    }
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('AzuremonitorlogsConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('AzuremonitorlogsConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('AzureadConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('AzureadConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('KeyvaultConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('KeyvaultConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+}
+}
+}
+]
+}
